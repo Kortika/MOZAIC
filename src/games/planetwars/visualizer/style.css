@@ -7,9 +7,10 @@
   height: 85vh;
   width: auto;
   align-self: center;
-  padding-left: 5vh;
+  padding-left: 10vh;
 }
-.controlbar {
+
+#controlbar {
   height: 15vh;
   width: 100%;
 }
@@ -19,19 +20,22 @@
   float: right;
 }
 
-.speedcontrols > .control-button {
+.control-button {
   width: 50px;
   height: 50px;
   position: relative;
 }
 
-.speedcontrols > .control-button > .img {
+.control-button > .img {
   width: 100%;
   height: auto;
 }
 
+#hide {
+  float: right;
+}
 
-.controlbar p {
+#controlbar p {
   font-size: 12px;
   width: auto;
   float: left;

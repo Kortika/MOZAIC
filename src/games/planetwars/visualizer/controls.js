@@ -65,6 +65,13 @@ class Controls {
       pause_button.attr("hidden", null);
     });
 
+    d3.select('#hide').on("click", e => {
+      var hide = d3.select('#hide');
+      var control_bar = d3.select('#controlbar')
+      control_bar.attr("hidden", true);
+      hide.attr("hidden", null);
+    });
+
     d3.select('#turn_slider')
       .attr('min', 0)
       .attr('max', visualizer.maxTurns)

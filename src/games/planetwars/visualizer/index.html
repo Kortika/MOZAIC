@@ -13,10 +13,15 @@
       </svg>
 
 
-      <div class="controlbar">
+      <div id="controlbar">
         <input type="range" id="turn_slider" value="0" class="control"/>
         <input id="file-select" type="file" onchange="visualizer.parseJson(this)" class="control"/>
         <p class="speed"></p>
+
+        <!-- Visibility button -->
+        <button type="button" name="button" id="hide" class="control control-button">
+            <img src="res/hide.svg"/>
+        </button>
 
         <div class="speedcontrols">
           
@@ -51,6 +56,8 @@
           </button>
 
         </div>
+
+
       </div>
 
     </div>
