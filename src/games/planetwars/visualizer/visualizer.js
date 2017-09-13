@@ -1,6 +1,8 @@
 // Constants
 
-const svg = d3.select("svg");
+var svg = d3.select("svg"),
+      width = +svg.attr("width"),
+      height = +svg.attr("height");
 
 const planet_types = ["water", "red", "moon", "mars", "earth"];
 
@@ -15,6 +17,21 @@ class Visualizer {
   constructor() {
     this.speed = base_speed;
     this.turn = 0;
+  }
+
+  redrawPolygon(data) {
+    for(var planet_name in data.planet_map){
+      if(data.planet_map.hasOwnProperty(planet_name)){
+        var planet = data.planet_map[planet_name];
+        planet.polygon.style.fill = data.color_map[planet.owner];
+      }
+    }
+
+    data.polygon
+        .attr("d", function(d) {
+          let temp = d ? "M" + d.join("L") + "Z" : null;
+          return temp;
+        });
   }
 
   setupPatterns(svg) {
@@ -42,8 +59,6 @@ class Visualizer {
   }
 
   init(data) {
-
-    // Planet map
     data.planet_map = data.planets.reduce((map, o) => {
       o.type = planet_types[Math.floor(Math.random() * planet_types.length)];
       o.size = this.randomBetween(1, max_planet_size);
@@ -77,6 +92,39 @@ class Visualizer {
       .attr('height', window.innerHeight)
       .attr('viewBox', min_x + ' ' + min_y + ' ' + max_x + ' ' + max_y);
 
+    // seting up voronoi
+    var points = [];
+
+    for(var plan of data.planets){
+      points.push([plan.x, plan.y]);
+    }
+
+    // making sure voronoi spreads his wings to full width and height
+    var voronoi = d3.voronoi()
+        .extent([[min_x, min_y], [max_x, max_y]]);
+
+    // making polygons of planets
+    var sub = voronoi.polygons(points);
+    var polygon = svg.append("g")
+      .selectAll("path")
+      .data(sub)
+      .enter().append("path");
+
+    data.polygon = polygon;
+
+    // adding polygon to correct planet
+    polygon._groups[0].forEach(p => {
+      var pos = p.__data__.data;
+      for(var plan_name in data.planet_map){
+        if(data.planet_map.hasOwnProperty(plan_name)){
+          var plan = data.planet_map[plan_name];
+          if (pos[0] === plan.x && pos[1] === plan.y){
+            plan.polygon = p;
+          }
+        }
+      }
+    });
+
     // Color map
     const color = d3.scaleOrdinal(d3.schemeCategory10);
     data.color_map = data.players.reduce((map, o, i) => {
@@ -84,6 +132,8 @@ class Visualizer {
       return map;
     }, {});
     data.color_map[null] = "#000";
+
+    this.redrawPolygon(data);
   }
 
   prepareData(data) {
@@ -143,6 +193,8 @@ class Visualizer {
       .attr('fill', d => data.color_map[d.owner])
       .text(d => "\u2694 " + d.ship_count)
       .append('title').text(d => d.owner);
+
+
   }
 
   addFleets(d3selector, data) {
@@ -202,7 +254,7 @@ class Visualizer {
         var dy = b * Math.sin(angle);
 
         // unrotated slope
-        var t1 = (dx * Math.pow(b, 2)) / (dy * Math.pow(a, 2))
+        var t1 = (dx * Math.pow(b, 2)) / (dy * Math.pow(a, 2));
 
         var sx = t1 * Math.cos(w) - Math.sin(w);
         var sy = Math.cos(w) + t1 * Math.sin(w);
@@ -253,6 +305,8 @@ class Visualizer {
   }
 
   updateAnimations(data) {
+    this.redrawPolygon(data);
+
     var planets = svg.selectAll('.planet_wrapper').data(data.planets, d => d.name);
     var expeditions = svg.selectAll('.expedition')
       .data(data.expeditions, d => {
@@ -328,7 +382,7 @@ class Visualizer {
 
         var degrees = this.toDegrees(Math.atan2(sy, sx));
         return 'rotate(' + (degrees + 180) % 360 + ')';
-      })
+      });
 
     // Old expeditions to remove
     expeditions.exit().remove();
@@ -353,7 +407,7 @@ class Visualizer {
             return 'rotate(' + (d.angle - elapsed * (d.speed / 10000)) % 360 + ')';
           });
       });
-    }
+    };
     reader.readAsText(e.files[0]);
 
   }
@@ -373,6 +427,7 @@ class Visualizer {
       data.lastTurn = lastTurn;
       data.planet_map = this.parsed.turns[0].planet_map;
       data.color_map = this.parsed.turns[0].color_map;
+      data.polygon = this.parsed.turns[0].polygon;
       this.prepareData(data);
       this.update(data);
       this.updateAnimations(data);
@@ -410,6 +465,20 @@ class Visualizer {
   }
 
   // Help functions
+
+  inPolygon(point, polygon){
+    var x = point[0], y = point[1];
+    var inside = false;
+    for(var i = 0, j = polygon.length - 1; i < polygon.length; j = i++){
+      var xi = polygon[i][0], yi = polygon[i][1];
+      var xj = polygon[j][0], yj = polygon[j][1];
+
+      var intersect = ((yi > y) != (yj > y))
+        && (x < (xj-xi)* (y-yi) / (yj-yi)+xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
 
   randomIntBetween(min, max) {
     return Math.floor(this.randomBetween(min, max));
@@ -500,3 +569,11 @@ class Visualizer {
     return this.parsed.turns.length - 1;
   }
 }
+
+/*
+
+set turn kan beter, want d3.select('#turn_slider').property(value) ... change
+moet gekoppeld worden aan die turn weergeven, dan gaat er geen stuttering meer
+zijn denk ik
+
+*/
