@@ -12,6 +12,164 @@ const orbit_size = 2;
 // Globals
 const base_speed = 1000;
 
+function distance(p1, p2){
+  return Math.hypot(p2.x - p1.x, p2.y - p1.y);
+}
+
+function weighted_middle(p1,p2){
+  var w1 = p1.weight || 1;
+  var w2 = p2.weight || 1;
+  return {x:(p1.x*w1 + p2.x*w2)/2, y:(p1.y*w1+p2.y*w2)/2};
+}
+
+function turning_right(p1, p2, p3) {
+  var x = (p2.x-p1.x)*(p3.y-p1.y) - (p2.y-p1.y)*(p3.x-p1.x);
+  return x < 0;
+}
+
+function getPath(points) {
+  var point_strings = [];
+  points.forEach(p => point_strings.push(p.x+","+p.y));
+  return "M"+point_strings.join("L")+"Z";
+}
+
+class Line{
+  constructor(p1, p2, is_line_bisector){
+    this.init_a_and_b(p1, p2);
+    if(is_line_bisector){
+      // getting weighted middle
+      var middle = weighted_middle(p1,p2);
+
+      // Perpendicular
+      var sub = this.a;
+      this.a = -this.b;
+      this.b = sub;
+
+      this.init_c(middle);
+    }else{
+      this.init_c(p1);
+    }
+  }
+
+  init_a_and_b(p1, p2){
+    this.a = p2.y - p1.y;
+    this.b = p1.x - p2.x;
+  }
+
+  init_c(p){
+    this.c = -this.a*p.x - this.b*p.y;
+  }
+
+  intersect(other_line){
+    if(this.b === 0){
+      var x = -this.c / this.a;
+      var y = (-other_line.c - other_line.a * x)/other_line.b;
+      return {x:x, y:y};
+    }
+    if(other_line.b === 0){
+      return other_line.intersect(this);
+    }
+    var a = -this.a / this.b;
+    var c = -this.c / this.b;
+    var b = -other_line.a / other_line.b;
+    var d = -other_line.c / other_line.b;
+
+    return {
+      x: (d-c)/(a-b),
+      y: (a*d-b*c)/(a-b)
+    };
+  }
+}
+
+class Voronoi {
+  constructor(data, box){
+    var box_lines = [
+      new Line({x:box.min_x, y:box.min_y}, {x:box.min_x, y:box.max_y}, false),
+      new Line({x:box.min_x, y:box.min_y}, {x:box.max_x, y:box.min_y}, false),
+      new Line({x:box.max_x, y:box.max_y}, {x:box.max_x, y:box.min_y}, false),
+      new Line({x:box.max_x, y:box.max_y}, {x:box.min_x, y:box.max_y}, false)
+    ];
+    var points = [];
+    data.forEach(p => {
+      points.push( {
+        point: p,
+        lines: box_lines.slice(),
+        closest: Infinity,
+        closest_line: undefined,
+        closest_middle: undefined,
+        polygon: []
+      });
+    });
+
+    // setting up bisector lines
+    for (var i = 0; i < points.length-1; i++) {
+      for (var j = i+1; j < points.length; j++) {
+        var p1 = points[i].point;
+        var p2 = points[j].point;
+        var line = new Line(p1,p2, true);
+        var middle = weighted_middle(p1,p2);
+        var d1 = distance(middle, p1);
+        if(d1 < points[i].closest){
+          points[i].closest = d1;
+          points[i].closest_line = line;
+          points[i].closest_middle = middle;
+        }
+        var d2 = distance(middle, p2);
+        if(d2 < points[j].closest){
+          points[j].closest = d2;
+          points[j].closest_line = line;
+          points[j].closest_middle = middle;
+        }
+        points[i].lines.push(line);
+        points[j].lines.push(line);
+      }
+    }
+
+    // looping over all points to make the polygon
+    for(var p of points){
+      var current_line = p.closest_line;
+      var current_point = p.closest_middle;
+      var first_line = current_line;
+      var used = new Set();
+
+      while(current_line !== first_line || used.size === 0){
+        var dist = Infinity;
+        var next_line = undefined;
+        var next_point = undefined;
+        for(var o_line of p.lines){
+          if(! used.has(o_line)){
+            var point = current_line.intersect(o_line);
+            // Probleem, point kan dichter liggen ookal is het niet deel van de polygon
+            var d = distance(current_point, point);
+            if(d < dist && turning_right(p.point, current_point, point)){
+              dist = d;
+              next_line = o_line;
+              next_point = point;
+            }
+          }
+        }
+        used.add(next_line);
+        p.polygon.push(next_point);
+        current_line = next_line;
+        current_point = next_point;
+      }
+    }
+
+    this.points = points;
+  }
+
+  polygons(){
+    var out = [];
+    for(var p of this.points){
+      out.push({
+        point: p.point,
+        polygon: p.polygon
+      });
+    }
+    return out;
+  }
+}
+
 class Visualizer {
 
   constructor() {
@@ -20,18 +178,10 @@ class Visualizer {
   }
 
   redrawPolygon(data) {
-    for(var planet_name in data.planet_map){
-      if(data.planet_map.hasOwnProperty(planet_name)){
-        var planet = data.planet_map[planet_name];
-        planet.polygon.style.fill = data.color_map[planet.owner];
-      }
+    for(var plan of data.planets){
+      document.getElementById(plan.name+"_polygon").style.fill =
+        data.color_map[plan.owner];
     }
-
-    data.polygon
-        .attr("d", function(d) {
-          let temp = d ? "M" + d.join("L") + "Z" : null;
-          return temp;
-        });
   }
 
   setupPatterns(svg) {
@@ -93,35 +243,28 @@ class Visualizer {
     // seting up voronoi
     var points = [];
 
-    for(var plan of data.planets){
-      points.push([plan.x, plan.y]);
+    for(let plan of data.planets){
+      points.push({x:plan.x, y:plan.y});
     }
 
-    // making sure voronoi spreads his wings to full width and height
-    var voronoi = d3.voronoi()
-        .extent([[min_x, min_y], [max_x, max_y]]);
+    var voronoi = new Voronoi(points, {min_x:min_x, min_y:min_y, max_x:max_x, max_y:max_y});
 
-    // making polygons of planets
-    var sub = voronoi.polygons(points);
-    var polygon = svg.append("g")
-      .selectAll("path")
-      .data(sub)
-      .enter().append("path");
+    var poly = voronoi.polygons();
+    console.log(poly);
 
-    data.polygon = polygon;
-
-    // adding polygon to correct planet
-    polygon._groups[0].forEach(p => {
-      var pos = p.__data__.data;
-      for(var plan_name in data.planet_map){
-        if(data.planet_map.hasOwnProperty(plan_name)){
-          var plan = data.planet_map[plan_name];
-          if (pos[0] === plan.x && pos[1] === plan.y){
-            plan.polygon = p;
-          }
+    for(var pol of poly){
+      var planet_name = "";
+      for(let plan of data.planets){
+        if(pol.point.x === plan.x && pol.point.y === plan.y){
+          planet_name = plan.name;
         }
       }
-    });
+      planet_name += "_polygon";
+      svg.append("path")
+        .attr("d", getPath(pol.polygon))
+        .attr("class", "polygon")
+        .attr("id", planet_name);
+    }
 
     // Color map
     const color = d3.scaleOrdinal(d3.schemeCategory10);
@@ -178,7 +321,7 @@ class Visualizer {
       .attr('y', d => d.y + d.size + 1)
       .attr("font-family", "sans-serif")
       .attr("font-size", "1px")
-      .attr('fill', d => data.color_map[d.owner])
+      .attr('fill', d => "white")
       .text(d => d.name)
       .append('title')
       .text(d => d.owner);
@@ -188,23 +331,12 @@ class Visualizer {
       .attr('y', d => d.y + d.size + 3)
       .attr("font-family", "sans-serif")
       .attr("font-size", "1px")
-      .attr('fill', d => data.color_map[d.owner])
+      .attr('fill', d => "white")
       .text(d => "\u2694 " + d.ship_count)
       .append('title').text(d => d.owner);
-
-
   }
 
   addFleets(d3selector, data) {
-    d3selector.append('circle')
-      .attr('class', 'orbit')
-      .attr('transform', d => this.translation(d.planet))
-      .attr('r', d => d.distance)
-      .style('fill', "none")
-      .style('stroke', d => {
-        return data.color_map[d.planet.owner];
-      })
-      .style('stroke-width', 0.05);
 
     var wrapper = d3selector.append('g')
       .attr('transform', d => this.translation(d.planet));
@@ -221,6 +353,10 @@ class Visualizer {
   }
 
   addExpeditions(d3selector, data) {
+    d3selector.append('back')
+    .attr('r', 1)
+    .style('fill', d => data.color_map[d.owner]);
+
     d3selector.attr('transform', d => {
       var point = this.homannPosition(d);
       return this.translation(point);
@@ -228,6 +364,8 @@ class Visualizer {
 
     d3selector.append('circle')
       .attr('transform', d => {
+        console.log("expedition");
+        console.log(d);
         var total_distance = this.euclideanDistance(d.origin_object, d.destination_object);
 
         var r1 = (d.origin_object.size) / 2 + 3;
@@ -248,8 +386,8 @@ class Visualizer {
 
 
         // unrotated elipse point
-        var dx = a * Math.cos(angle);
-        var dy = b * Math.sin(angle);
+        dx = a * Math.cos(angle);
+        dy = b * Math.sin(angle);
 
         // unrotated slope
         var t1 = (dx * Math.pow(b, 2)) / (dy * Math.pow(a, 2));
@@ -261,16 +399,17 @@ class Visualizer {
         return 'rotate(' + (degrees + 180) % 360 + ')';
       })
       .attr('r', 1)
-      .style('stroke', d => data.color_map[d.owner])
+      .style('stroke', "black")
       .style('stroke-width', 0.05)
-      .attr('fill', d => "url(#ship)")
+      .attr('fill', "url(#ship)")
       .append('title').text(d => d.owner);
 
     d3selector.append('text')
       .attr('y', 2)
       .attr("font-family", "sans-serif")
       .attr("font-size", "1px")
-      .attr('fill', d => data.color_map[d.owner])
+      .attr("fill", "white")
+      //.attr('fill', d => data.color_map[d.owner])
       .text(d => "\u2694 " + d.ship_count)
       .append('title').text(d => d.owner);
   }
@@ -313,7 +452,7 @@ class Visualizer {
 
     //PLANETS
     // Text color
-    this.attachToAllChildren(planets.selectAll('text')).attr('fill', d => data.color_map[d.owner]);
+    //this.attachToAllChildren(planets.selectAll('text')).attr('fill', d => data.color_map[d.owner]);
     this.attachToAllChildren(planets.selectAll('title')).text(d => d.owner);
 
     //Takeover transition
