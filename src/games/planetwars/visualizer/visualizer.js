@@ -19,7 +19,8 @@ function distance(p1, p2){
 function weighted_middle(p1,p2){
   var w1 = p1.weight || 1;
   var w2 = p2.weight || 1;
-  return {x:(p1.x*w1 + p2.x*w2)/2, y:(p1.y*w1+p2.y*w2)/2};
+  var weight_sum = w1 + w2;
+  return {x:(p1.x*w1 + p2.x*w2)/weight_sum, y:(p1.y*w1+p2.y*w2)/weight_sum};
 }
 
 function turning_right(p1, p2, p3) {
@@ -225,16 +226,16 @@ class Visualizer {
 
     data.planets.forEach(e => {
       if (e.x > max_x) {
-        max_x = e.x + (e.size + 2 + padding);
+        max_x = e.x + (e.size + 3 + padding);
       }
       if (e.x < min_x) {
-        min_x = e.x - (e.size + 2 + padding);
+        min_x = e.x - (e.size + 3 + padding);
       }
       if (e.y > max_y) {
-        max_y = e.y + (e.size + 2 + padding);
+        max_y = e.y + (e.size + 5 + padding);
       }
       if (e.y < min_y) {
-        min_y = e.y - (e.size + 2 + padding);
+        min_y = e.y - (e.size + 3 + padding);
       }
     });
 
@@ -244,6 +245,7 @@ class Visualizer {
     var points = [];
 
     for(let plan of data.planets){
+      console.log(plan);
       points.push({x:plan.x, y:plan.y});
     }
 
@@ -353,14 +355,15 @@ class Visualizer {
   }
 
   addExpeditions(d3selector, data) {
-    d3selector.append('back')
-    .attr('r', 1)
-    .style('fill', d => data.color_map[d.owner]);
+
 
     d3selector.attr('transform', d => {
       var point = this.homannPosition(d);
       return this.translation(point);
     });
+
+    d3selector.append("circle")
+      .attr("r", 1).attr("fill", d => data.color_map[d.owner]);
 
     d3selector.append('circle')
       .attr('transform', d => {
@@ -400,7 +403,7 @@ class Visualizer {
       })
       .attr('r', 1)
       .style('stroke', "black")
-      .style('stroke-width', 0.05)
+      .style('stroke-width', 0.1)
       .attr('fill', "url(#ship)")
       .append('title').text(d => d.owner);
 
@@ -485,7 +488,7 @@ class Visualizer {
         };
       }).on('interrupt', e => console.log("inter"));
 
-    expeditions.select('circle').transition()
+    expeditions.select('circle:nth-child(2)').transition()
       .duration(this.speed)
       .ease(d3.easeLinear)
       .attr('transform', d => {
@@ -602,20 +605,6 @@ class Visualizer {
   }
 
   // Help functions
-
-  inPolygon(point, polygon){
-    var x = point[0], y = point[1];
-    var inside = false;
-    for(var i = 0, j = polygon.length - 1; i < polygon.length; j = i++){
-      var xi = polygon[i][0], yi = polygon[i][1];
-      var xj = polygon[j][0], yj = polygon[j][1];
-
-      var intersect = ((yi > y) != (yj > y))
-        && (x < (xj-xi)* (y-yi) / (yj-yi)+xi);
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
 
   randomIntBetween(min, max) {
     return Math.floor(this.randomBetween(min, max));
