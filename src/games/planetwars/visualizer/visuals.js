@@ -69,6 +69,7 @@ class Visuals {
   }
 
   addNewObjects(turn, color_map) {
+    this.color_map = color_map;
     var turn = new Visuals.TurnWrapper(turn);
     var planets = turn.planets;
     var expeditions = turn.expeditions;
@@ -89,11 +90,13 @@ class Visuals {
   }
 
   update(turn, turn_control) {
+    this.drawVoronoi(turn, this.min, this.max, this.color, 1);
     var turn = new Visuals.TurnWrapper(turn);
     var planets = turn.planets;
     var expeditions = turn.expeditions;
     var scores = turn.scores;
 
+    console.log(turn_control);
     //PLANETS
     Visuals.Planets.update(planets, turn_control);
     Visuals.Planets.removeOld(planets);
@@ -102,6 +105,31 @@ class Visuals {
     Visuals.Expeditions.removeOld(expeditions);
 
     Visuals.Scores.update(scores);
+  }
+
+  drawVoronoi(turn, min, max, color_map, amount){
+    console.log(turn);
+    var points = [];
+    turn.planets.forEach(p => points.push(new Point(p.x, p.y, p.ship_count, p.owner, p.name)));
+    var vor = new Visuals.Voronoi(points, min, max);
+    var polygons = [];
+    var polys = vor.polygons();
+    for(var i = 0; i < amount; i++){
+      var used = new Set();
+      for(var poly of polys){
+        if(! used.has(poly)){
+          var target = [];
+          poly.startMerge(i, amount, target, used);
+          polygons.push({owner: poly.owner, polygon:target});
+        }
+      }
+    }
+    for(var poly of polygons){
+      var fill = "red" ;//color_map[poly.owner];
+      container.append("path").attr("class", "polygon")
+        .attr("d", space_math.getPath(poly.polygon)).style("fill", fill)
+        .style("opacity", 1/amount);
+    }
   }
 
   expHomanRotation(exp) {
@@ -521,3 +549,212 @@ Visuals.Gimmicks = class {
       .attr('fill', 'url(#jigglyplanet)');
   }
 }
+
+
+Visuals.Voronoi = class {
+  constructor(data, min, max){
+    var box_lines = [
+      new Line(new Point(min[0], min[1]), new Point(min[0], max[1]), false),
+      new Line(new Point(min[0], min[1]), new Point(max[0], min[1]), false),
+      new Line(new Point(max[0], max[1]), new Point(min[0], max[1]), false),
+      new Line(new Point(max[0], max[1]), new Point(max[0], min[1]), false)
+    ];
+    var points = [];
+    data.forEach(p => {
+      var lines = [];
+      box_lines.forEach(p => lines.push({line: p}));
+      points.push(new Visuals.Voronoi.Polygon(p.owner, p.name, p, lines));
+    });
+
+    // Setting up bisector lines
+    for(var i = 0; i < points.length -1; i++){
+      for(var j = i+1; j < points.length; j++){
+        var p1 = points[i].point;
+        var p2 = points[j].point;
+        var line = new Line(p1, p2, true);
+        var middle = space_math.weighted_middle(p1, p2);
+        var d1 = space_math.euclideanDistance(middle, p1);
+        if(d1 < points[i].closest){
+          points[i].closest = d1;
+          points[i].closest_line = line;
+          points[i].closest_middle = middle;
+        }
+        var d2 = space_math.euclideanDistance(middle, p2);
+        if(d2 < points[j].closest){
+          points[j].closest = d1;
+          points[j].closest_line = line;
+          points[j].closest_middle = middle;
+        }
+        points[i].lines.push({line: line, middle:middle, other: points[j]});
+        points[j].lines.push({line: line, middle:middle, other: points[i]});
+      }
+    }
+
+    // looping over all points to make the polygon
+    for(var p of points){
+      var current_line = p.closest_line;
+      var current_point = p.closest_middle;
+      var first_line = current_line;
+      var used = new Set();
+      var addMiddle = false;
+      var foundNeighbour = false;
+
+      while(current_line !== first_line || used.size === 0){
+        var dist = Infinity;
+        var next_line = undefined;
+        var next_point = undefined;
+        var next_middle = undefined;
+        var next_neighbour = undefined;
+        for(var o_line of p.lines){
+          if(! used.has(o_line.line)){
+            var point = current_line.intersect(o_line.line);
+            var d = space_math.euclideanDistance(current_point, point);
+            if(d < dist && space_math.turning_right(p.point, current_point, point)){
+              dist = d;
+              next_line = o_line.line;
+              next_point = point;
+              next_middle = o_line.middle;
+              next_neighbour = o_line.other;
+            }
+          }
+        }
+        if(foundNeighbour){
+          foundNeighbour = false;
+          Object.assign(p.neighbours[p.neighbours.length-1], {p1: current_point, p2:next_point});
+        }
+        used.add(next_line.line);
+        if(addMiddle){
+          p.polygon.push(space_math.weighted_middle(current_point, next_point));
+          addMiddle = false;
+        }
+        p.polygon.push(next_point);
+        if(next_middle === undefined){ // punten op de buitenste box
+          addMiddle = true;
+        }else{
+          p.polygon.push(next_middle);
+        }
+
+        if(next_neighbour !== undefined){
+          p.neighbours.push({neighbour:next_neighbour});
+          foundNeighbour = true;
+        }
+
+        current_line = next_line;
+        current_point = next_point;
+      }
+      if(addMiddle){
+        p.polygon.push(space_math.weighted_middle(p.polygon[0], p.polygon[p.polygon.length-1]));
+        addMiddle = false;
+      }
+      if(foundNeighbour){
+        foundNeighbour = false;
+        Object.assign(p.neighbours[p.neighbours.length-1], {p1: p.polygon[0], p2:p.polygon[p.polygon.length-2]});
+      }
+    }
+
+    this.points = points;
+  }
+
+  polygons(){
+    return this.points;
+  }
+};
+
+Visuals.Voronoi.Polygon = class {
+  constructor(owner, name, point, lines){
+    this.owner = owner;
+    this.name = name;
+    this.point = point;
+    this.closest = Infinity;
+    this.closest_line = undefined;
+    this.closest_middle = undefined;
+    this.polygon = [];
+    this.neighbours = [];
+    this.lines = lines;
+    this.pointToPointMap = {};
+  }
+
+  getStartingIndex(){
+    var good = false;
+    for (var i = 0; i < this.polygon.length && !good; i+=2) {
+      good = true;
+      var point = this.polygon[i];
+      console.log("i: "+i);
+      for(var n of this.neighbours){
+        if(this.owner === n.neighbour.owner && (point === n.p1 || point === n.p2)){
+          good = false;
+        }
+      }
+    }
+    return (good) ? i -2 : undefined;
+  }
+
+  getPoint(point, i, max){
+    if(i === 0){
+      return point;
+    }
+    if(this.pointToPointMap[point] === undefined){
+      var line = new Line(point, this.point, false);
+      var radius = this.point.radius || 3;
+      this.pointToPointMap[point] = new Point(this.point.x+(line.cos()*radius), this.point.y+(line.sin()*radius));
+    }
+
+    var p = this.pointToPointMap[point];
+    point.weight = max-i;
+    p.weight = i;
+    return space_math.weighted_middle(p,point);
+  }
+
+  continueMerge(i, max, target, used, from, end){
+    console.log("changed to "+this.name);
+    used.add(this);
+    var index = this.polygon.indexOf(from);
+    var point = this.polygon[index];
+    while(!point.equals(end) && target.length < 300){
+      index = (index+1) % this.polygon.length;
+      point = this.polygon[index];
+      var rp = this.getPoint(point, i, max);
+
+      for(var n of this.neighbours){
+        if(this.owner === n.neighbour.owner && (point === n.p1 || point === n.p2)){
+          var otherPoint = (point === n.p1) ? n.p2 : n.p1;
+          var rop = n.neighbour.getPoint(point, i, max);
+          var dist = space_math.euclideanDistance(rp, rop);
+          if(dist < space_math.euclideanDistance(rp, this.point) && dist < space_math.euclideanDistance(rop, n.neighbour.point)){
+            var rp2 = this.getPoint(otherPoint, i, max);
+            var rop2 = n.neighbour.getPoint(otherPoint, i, max);
+            var dist2 = space_math.euclideanDistance(rp2, rop2);
+            if(dist2 < space_math.euclideanDistance(rp2, this.point) && dist < space_math.euclideanDistance(rop2, n.neighbour.point)){
+              // GO TO OTHER POLYGON
+              rp.weight = this.point.wieght;
+              rop.weight = n.neighbour.point.weight;
+
+              var mp = space_math.weighted_middle(rp, rop);
+              mp.weight = max - i;
+              var middle = space_math.weighted_middle(this.point, n.neighbour.point);
+              middle.weight = i;
+              target.push(space_math.weighted_middle(mp, middle));
+
+              n.neighbour.continueMerge(i, max, target, used, point, end);
+              return;
+            }
+          }
+        }
+      }
+      target.push(rp);
+    }
+  }
+
+  startMerge(i, max, target, used){
+    var start = this.getStartingIndex();
+    if(start === undefined){
+      return;
+    }
+
+    var end = this.polygon[space_math.mod(start - 1, this.polygon.length)];
+    start = this.polygon[start];
+    target.push(this.getPoint(start, i, max));
+
+    this.continueMerge(i, max, target, used, start, end);
+  }
+};

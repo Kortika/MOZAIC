@@ -7,6 +7,11 @@ body {
   margin: 0;
 }
 
+#polygon{
+  border-color: black;
+  border-width: 2;
+}
+
 #view {
   position: relative;
   height: 100vh;
