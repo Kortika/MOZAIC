@@ -194,8 +194,8 @@ Visuals.Expeditions = class {
   }
 
   static getLocation(exp) {
-    //var point = exp.homannPosition();
-    var point = exp.position();
+    var point = exp.homannPosition();
+    //var point = exp.position();
     return Visuals.translation(point)
   }
 

@@ -227,8 +227,8 @@ class Expedition {
   }
 
   homannPosition(angle) {
-    var total_distance = space_math.euclideanDistance(this.origin, this.destination);
-    if (!angle) angle = this.homannAngle(this.turns_remaining, total_distance);
+    var total_distance = Math.ceil(space_math.euclideanDistance(this.origin, this.destination));
+    if (!angle) angle = this.homannAngle(this.turns_remaining - 1, total_distance);
 
     var r1 = (this.origin.size) / 2 + 3;
     var r2 = (this.destination.size) / 2 + 3;
@@ -259,6 +259,7 @@ class Expedition {
   homannAngle(turn, distance) {
     if (!distance) distance = space_math.euclideanDistance(this.origin, this.destination);
     var mod = turn / distance;
+    console.log(mod * (Math.PI * 2) - Math.PI);
     return mod * (Math.PI * 2) - Math.PI;
   }
 }
