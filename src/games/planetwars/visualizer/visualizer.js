@@ -107,7 +107,7 @@ class TurnController {
     } else {
       var turn = this.turns[newTurn];
       visuals.addNewObjects(turn, this.color_map);
-      visuals.update(turn, this);
+      visuals.update(turn, this, this.color_map);
       return true;
     }
   }

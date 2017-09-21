@@ -1,6 +1,7 @@
 // Constants
 const svg = d3.select("#game");
 const container = svg.append('g');
+container.append("g").attr("class", "voronoi");
 
 class Visuals {
   constructor() {
@@ -69,7 +70,6 @@ class Visuals {
   }
 
   addNewObjects(turn, color_map) {
-    this.color_map = color_map;
     var turn = new Visuals.TurnWrapper(turn);
     var planets = turn.planets;
     var expeditions = turn.expeditions;
@@ -89,12 +89,15 @@ class Visuals {
     Visuals.Gimmicks.addGimmicks(turn.turn);
   }
 
-  update(turn, turn_control) {
-    this.drawVoronoi(turn, this.min, this.max, this.color, 1);
+  update(turn, turn_control, color_map) {
+    this.drawVoronoi(turn, this.min, this.max, color_map, 1);
     var turn = new Visuals.TurnWrapper(turn);
     var planets = turn.planets;
     var expeditions = turn.expeditions;
     var scores = turn.scores;
+
+    console.log(planets);
+    console.log(expeditions);
 
     console.log(turn_control);
     //PLANETS
@@ -108,6 +111,7 @@ class Visuals {
   }
 
   drawVoronoi(turn, min, max, color_map, amount){
+    console.log(color_map);
     console.log(turn);
     var points = [];
     turn.planets.forEach(p => points.push(new Point(p.x, p.y, p.ship_count, p.owner, p.name)));
@@ -125,7 +129,9 @@ class Visuals {
       }
     }
     for(var poly of polygons){
-      var fill = "red" ;//color_map[poly.owner];
+      console.log(poly.owner);
+      var fill = color_map[poly.owner];
+      console.log(fill);
       container.append("path").attr("class", "polygon")
         .attr("d", space_math.getPath(poly.polygon)).style("fill", fill)
         .style("opacity", 1/amount);
@@ -731,7 +737,7 @@ Visuals.Voronoi.Polygon = class {
 
               var mp = space_math.weighted_middle(rp, rop);
               mp.weight = max - i;
-              var middle = space_math.weighted_middle(this.point, n.neighbour.point);
+              var middle = space_math.weighted_middle(point, otherPoint);
               middle.weight = i;
               target.push(space_math.weighted_middle(mp, middle));
 

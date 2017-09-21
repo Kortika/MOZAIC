@@ -41,6 +41,12 @@ class SpaceMath {
   }
 
   weighted_middle(p1, p2){
+    if(p1.weight === 0){
+      return p2;
+    }
+    if(p2.weight === 0){
+      return p1;
+    }
     var w1 = p1.weight || 1;
     var w2 = p2.weight || 1;
     var weight_sum = w1 + w2;
