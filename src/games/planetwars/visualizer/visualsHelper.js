@@ -177,7 +177,7 @@ class Expeditions {
   }
 
   static getLocation(exp) {
-    var point = Expeditions.position(exp);
+    var point = Expeditions.swarmPosition(exp);
     return Helper.translation(point);
   }
 
@@ -236,6 +236,20 @@ class Expeditions {
       'x': new_x,
       'y': new_y
     };
+  }
+
+  static swarmPosition(expedition) {
+    var pos = Expeditions.position(expedition);
+    var angle = Expeditions.angle(expedition);
+    var rx = 1*Math.cos(angle) - 1*Math.sin(angle);
+    var ry = 1*Math.sin(angle) + 1*Math.cos(angle);
+    var dx = rx * 1; //Math.floor(Math.random() * Config.max_planet_size);
+    var dy = ry * 1; //Math.floor(Math.random() * Config.max_planet_size);
+    
+    return {
+      'x': pos.x + dx,
+      'y': pos.y + dy
+    }
   }
 
   static homannPosition(angle) {
